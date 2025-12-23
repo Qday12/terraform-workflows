@@ -19,9 +19,6 @@ on:
       environment:
         type: string
         required: true
-      tf_var_file:
-        type: string
-        default: ''
       aws_region:
         type: string
         default: 'us-east-1'
@@ -100,12 +97,7 @@ jobs:
         run: terraform init
 
       - name: Terraform Plan
-        run: |
-          if [ -n "${{ inputs.tf_var_file }}" ]; then
-            terraform plan -out=tfplan -var-file=${{ inputs.tf_var_file }}
-          else
-            terraform plan -out=tfplan
-          fi
+        run: terraform plan -out=tfplan
 
       - uses: actions/upload-artifact@v4
         with:
