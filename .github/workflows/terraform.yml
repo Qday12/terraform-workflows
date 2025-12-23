@@ -1,0 +1,153 @@
+# ===========================================
+# Simple Terraform Workflow (GitHub Actions)
+# ===========================================
+# Save as: .github/workflows/terraform.yml
+#
+# Uses OIDC authentication with separate IAM roles:
+# - Plan role: Read-only access for terraform plan
+# - Apply role: Write access for terraform apply
+#
+# Prerequisites:
+# 1. Create an OIDC identity provider in AWS for GitHub Actions
+# 2. Create two IAM roles with trust policies for your repository
+# 3. Pass role ARNs as inputs to this workflow
+
+name: Terraform
+
+on:
+  workflow_call:
+    inputs:
+      terraform_root:
+        type: string
+        default: './terraform'
+      environment:
+        type: string
+        required: true
+      tf_var_file:
+        type: string
+        default: ''
+      aws_region:
+        type: string
+        default: 'us-east-1'
+      AWS_PLAN_ROLE_ARN:
+        description: 'IAM role ARN for terraform plan (read-only)'
+        type: string
+        required: true
+      AWS_APPLY_ROLE_ARN:
+        description: 'IAM role ARN for terraform apply (write access)'
+        type: string
+        required: true
+      confirm_apply:
+        description: 'Set to true to run apply'
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    defaults:
+      run:
+        working-directory: ${{ inputs.terraform_root }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      - name: Configure AWS (Plan Role)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ inputs.AWS_PLAN_ROLE_ARN }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Validate
+        run: |
+          terraform fmt -check
+          terraform validate
+
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    needs: validate
+    permissions:
+      id-token: write
+      contents: read
+    defaults:
+      run:
+        working-directory: ${{ inputs.terraform_root }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      - name: Configure AWS (Plan Role)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ inputs.AWS_PLAN_ROLE_ARN }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan
+        run: |
+          if [ -n "${{ inputs.tf_var_file }}" ]; then
+            terraform plan -out=tfplan -var-file=${{ inputs.tf_var_file }}
+          else
+            terraform plan -out=tfplan
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ inputs.terraform_root }}/tfplan
+
+  apply:
+    name: Apply
+    runs-on: ubuntu-latest
+    needs: plan
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.confirm_apply == true }}
+    environment: ${{ inputs.environment }}
+    permissions:
+      id-token: write
+      contents: read
+    defaults:
+      run:
+        working-directory: ${{ inputs.terraform_root }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      - name: Configure AWS (Apply Role)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ inputs.AWS_APPLY_ROLE_ARN }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ inputs.terraform_root }}
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan
