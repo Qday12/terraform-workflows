@@ -1,8 +1,4 @@
-# ===========================================
-# Simple Terraform Workflow (GitHub Actions)
-# ===========================================
-# Save as: .github/workflows/terraform.yml
-#
+
 # Uses OIDC authentication with separate IAM roles:
 # - Plan role: Read-only access for terraform plan
 # - Apply role: Write access for terraform apply
