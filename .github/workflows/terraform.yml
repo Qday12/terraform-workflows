@@ -1,4 +1,8 @@
-
+# ===========================================
+# Simple Terraform Workflow (GitHub Actions)
+# ===========================================
+# Save as: .github/workflows/terraform.yml
+#
 # Uses OIDC authentication with separate IAM roles:
 # - Plan role: Read-only access for terraform plan
 # - Apply role: Write access for terraform apply
@@ -6,7 +10,7 @@
 # Prerequisites:
 # 1. Create an OIDC identity provider in AWS for GitHub Actions
 # 2. Create two IAM roles with trust policies for your repository
-# 3. Pass role ARNs as inputs to this workflow
+# 3. Pass role ARNs as secrets to this workflow
 
 name: Terraform
 
@@ -22,18 +26,17 @@ on:
       aws_region:
         type: string
         default: 'us-east-1'
-      AWS_PLAN_ROLE_ARN:
-        description: 'IAM role ARN for terraform plan (read-only)'
-        type: string
-        required: true
-      AWS_APPLY_ROLE_ARN:
-        description: 'IAM role ARN for terraform apply (write access)'
-        type: string
-        required: true
       confirm_apply:
         description: 'Set to true to run apply'
         type: boolean
         default: false
+    secrets:
+      AWS_PLAN_ROLE_ARN:
+        description: 'IAM role ARN for terraform plan (read-only)'
+        required: true
+      AWS_APPLY_ROLE_ARN:
+        description: 'IAM role ARN for terraform apply (write access)'
+        required: true
 
 permissions:
   id-token: write
@@ -59,7 +62,7 @@ jobs:
       - name: Configure AWS (Plan Role)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ inputs.AWS_PLAN_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_PLAN_ROLE_ARN }}
           aws-region: ${{ inputs.aws_region }}
 
       - name: Terraform Init
@@ -90,7 +93,7 @@ jobs:
       - name: Configure AWS (Plan Role)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ inputs.AWS_PLAN_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_PLAN_ROLE_ARN }}
           aws-region: ${{ inputs.aws_region }}
 
       - name: Terraform Init
@@ -126,7 +129,7 @@ jobs:
       - name: Configure AWS (Apply Role)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ inputs.AWS_APPLY_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_APPLY_ROLE_ARN }}
           aws-region: ${{ inputs.aws_region }}
 
       - name: Terraform Init
